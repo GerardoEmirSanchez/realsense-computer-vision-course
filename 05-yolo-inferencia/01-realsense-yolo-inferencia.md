@@ -507,147 +507,147 @@ http://localhost:5000
 Genera la documentación completa ejecutando este bloque:
 
 ```bash
-cat << 'EOF' > ~/realsense-yolo-inferencia/README.md
-# MR3005C: Inteligencia Artificial con YOLOv8, Inferencia en Vivo y Telemetría Robótica
-
-Sistema de detección de objetos en tiempo real basado en redes neuronales convolucionales (*Single-Stage Detector*) utilizando cámaras Intel RealSense (serie D400), el framework Ultralytics YOLOv8 y visualización web multipart vía Flask en entornos WSL2 (Ubuntu).
-
----
-
-## Índice de Contenidos
-1. [Arquitectura de Red y Principio Anchor-Free](#arquitectura-de-red)
-2. [Protocolo de Enlace USB tras Reinicio](#protocolo-de-enlace-usb)
-3. [Instalación de Dependencias](#instalación-de-dependencias)
-4. [Descarga de Pesos Base (`descargar_pesos.py`)](#descarga-de-pesos)
-5. [Inferencia para Guiado Cinemático (`s5_inferencia_yolo.py`)](#inferencia-guiado)
-6. [Inferencia Multi-Objeto en Escena (`s5_inferencia_yolo_multiobj.py`)](#inferencia-multiobjeto)
-7. [Telemetría Métrica y Estimación de Distancia Pinhole](#telemetría-métrica)
-8. [Métricas Oficiales de Evaluación para Noviembre](#métricas-oficiales)
-9. [Solución de Problemas Frecuentes](#solución-de-problemas)
-
----
-
-## 1. Arquitectura de Red y Principio Anchor-Free
-
-YOLOv8 reemplaza el paradigma tradicional de clasificación por recortes (*Two-Stage Detectors* como R-CNN) formulando la detección como un problema de regresión unificado en una sola pasada (*Single Forward Pass*):
-
-* **Backbone (CSPDarknet + Bloques C2f):** Extrae características visuales jerárquicas mediante convoluciones sucesivas a tres escalas espaciales:
-  * **P3 ($80 \times 80$ celdas):** Especializado en piezas y objetos pequeños.
-  * **P4 ($40 \times 40$ celdas):** Especializado en objetos de escala media.
-  * **P5 ($20 \times 20$ celdas):** Especializado en estructuras globales grandes (ej. gaveta completa).
-* **Neck (PAN-FPN):** Red piramidal bidireccional que fusiona la información fina superficial con la semántica profunda.
-* **Head Desacoplada (*Anchor-Free*):** Separa la rama de regresión de cajas de la rama de clasificación. No utiliza cajas ancla rígidas; cada celda de la cuadrícula predice directamente cuatro distancias métricas continuas hacia las fronteras del objeto:
-  $$\mathbf{caja} = [l, t, r, b] \quad (\text{left, top, right, bottom})$$
-
----
-
-## 2. Protocolo de Enlace USB
-
-Al reiniciar la máquina host en Windows o reconectar el cable de la cámara:
-
-1. Abrir la terminal de **Ubuntu** desde el menú Inicio.
-2. En **PowerShell (como Administrador)** ejecutar:
-   ```powershell
-   usbipd attach --wsl --busid <TU-BUSID> --auto-attach
-   ```
-3. En la terminal de Ubuntu renovar permisos de acceso al dispositivo:
-   ```bash
-   sudo chmod 666 /dev/video* 2>/dev/null
-   sudo chmod -R 777 /dev/bus/usb/ 2>/dev/null
-   ```
-
----
-
-## 3. Instalación de Dependencias
-
-```bash
-# Activar entorno virtual de visión
-source ~/vision_env/bin/activate
-
-# Instalar librerías
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
----
-
-## 4. Descarga de Pesos Base
-
-Para descargar y verificar los pesos base oficiales:
-```bash
-python descargar_pesos.py
-```
-
----
-
-## 5. Inferencia para Guiado Cinemático (`s5_inferencia_yolo.py`)
-
-Aísla el objeto de mayor certeza, reporta errores cinemáticos $(e_u, e_v)$ y valida el acople:
-```bash
-python s5_inferencia_yolo.py
-```
-Abrir en el navegador de Windows: `http://localhost:5000`
-
----
-
-## 6. Inferencia Multi-Objeto en Escena (`s5_inferencia_yolo_multiobj.py`)
-
-Detecta todas las clases y objetos visibles simultáneamente en el campo de visión:
-```bash
-python s5_inferencia_yolo_multiobj.py
-```
-Abrir en el navegador de Windows: `http://localhost:5000`
-
----
-
-## 7. Telemetría Métrica
-
-A partir de las cuatro coordenadas entregadas por la red neuronal $[x_1, y_1, x_2, y_2]$:
-
-### 1. Centroide y Vector de Error de Alineación:
-$$c_x = \frac{x_1 + x_2}{2}, \quad c_y = \frac{y_1 + y_2}{2}$$
-$$e_u = c_x - 320, \quad e_v = c_y - 240$$
-
-### 2. Estimación de Distancia Frontal ($Z$) por Modelo Pinhole:
-Conociendo el ancho real de la pieza física ($W_{\text{real}} = 0.05\text{ m}$) y la distancia focal calibrada ($f_x \approx 615\text{ px}$):
-$$w_{\text{px}} = x_2 - x_1$$
-$$Z_{\text{est}} = \frac{f_x \cdot W_{\text{real}}}{w_{\text{px}}} = \frac{615 \cdot 0.05}{w_{\text{px}}} \quad (\text{en metros})$$
-
----
-
-## 8. Métricas Oficiales de Evaluación para Noviembre
-
-Para la entrega del **Entregable A7 (12 de Noviembre)**:
-
-* **Intersection over Union (IoU):**
-  $$\text{IoU} = \frac{\text{Área}(\text{Predicción} \cap \text{Ground Truth})}{\text{Área}(\text{Predicción} \cup \text{Ground Truth})}$$
-  Se clasifica como acierto geométrico (*True Positive*) si $\text{IoU} \ge 0.50$.
-* **Mean Average Precision ($mAP_{50}$):** Área bajo la curva Precision-Recall.
-  * **Criterio de aprobación:** $mAP_{50} \ge 0.85$ sobre el conjunto de prueba (*Test split*).
-
----
-
-## 9. Solución de Problemas Frecuentes
-
-* **`ImportError: No module named 'ultralytics'`:** Confirma que el entorno virtual esté activo (`source ~/vision_env/bin/activate`) y ejecuta `pip install ultralytics`.
-* **Latencia elevada (< 10 FPS):** Verifica que la inferencia utilice resolución `imgsz=640` o `imgsz=480`. Si se ejecuta sobre CPU, un valor típico oscila entre 20 y 35 FPS para el modelo Nano (`yolov8n`).
-* **`RuntimeError: No device connected`:** Confirma que la RealSense esté enlazada a WSL2 con `usbipd list` y reconecta con `--auto-attach`.
-EOF
-```
-
----
-
-## Paso 9: Subir el Repositorio a GitHub
-
-1. Ve a [GitHub](https://github.com/new).
-2. Nombra el repositorio: **`realsense-yolo-inferencia`**.
-3. Selecciona **Public** y deja las casillas de inicialización desmarcadas.
-4. En tu terminal de Ubuntu ejecuta:
-
-```bash
-cd ~/realsense-yolo-inferencia
-git add .
-git commit -m "feat: repositorio actualizado con inferencia guiada y multi-objeto yolov8"
-git remote add origin [https://github.com/GerardoEmirSanchez/realsense-yolo-inferencia.git](https://github.com/GerardoEmirSanchez/realsense-yolo-inferencia.git)
-git push -u origin main
+    cat << 'EOF' > ~/realsense-yolo-inferencia/README.md
+    # MR3005C: Inteligencia Artificial con YOLOv8, Inferencia en Vivo y Telemetría Robótica
+    
+    Sistema de detección de objetos en tiempo real basado en redes neuronales convolucionales (*Single-Stage Detector*) utilizando cámaras Intel RealSense (serie D400), el framework Ultralytics YOLOv8 y visualización web multipart vía Flask en entornos WSL2 (Ubuntu).
+    
+    ---
+    
+    ## Índice de Contenidos
+    1. [Arquitectura de Red y Principio Anchor-Free](#arquitectura-de-red)
+    2. [Protocolo de Enlace USB tras Reinicio](#protocolo-de-enlace-usb)
+    3. [Instalación de Dependencias](#instalación-de-dependencias)
+    4. [Descarga de Pesos Base (`descargar_pesos.py`)](#descarga-de-pesos)
+    5. [Inferencia para Guiado Cinemático (`s5_inferencia_yolo.py`)](#inferencia-guiado)
+    6. [Inferencia Multi-Objeto en Escena (`s5_inferencia_yolo_multiobj.py`)](#inferencia-multiobjeto)
+    7. [Telemetría Métrica y Estimación de Distancia Pinhole](#telemetría-métrica)
+    8. [Métricas Oficiales de Evaluación para Noviembre](#métricas-oficiales)
+    9. [Solución de Problemas Frecuentes](#solución-de-problemas)
+    
+    ---
+    
+    ## 1. Arquitectura de Red y Principio Anchor-Free
+    
+    YOLOv8 reemplaza el paradigma tradicional de clasificación por recortes (*Two-Stage Detectors* como R-CNN) formulando la detección como un problema de regresión unificado en una sola pasada (*Single Forward Pass*):
+    
+    * **Backbone (CSPDarknet + Bloques C2f):** Extrae características visuales jerárquicas mediante convoluciones sucesivas a tres escalas espaciales:
+      * **P3 ($80 \times 80$ celdas):** Especializado en piezas y objetos pequeños.
+      * **P4 ($40 \times 40$ celdas):** Especializado en objetos de escala media.
+      * **P5 ($20 \times 20$ celdas):** Especializado en estructuras globales grandes (ej. gaveta completa).
+    * **Neck (PAN-FPN):** Red piramidal bidireccional que fusiona la información fina superficial con la semántica profunda.
+    * **Head Desacoplada (*Anchor-Free*):** Separa la rama de regresión de cajas de la rama de clasificación. No utiliza cajas ancla rígidas; cada celda de la cuadrícula predice directamente cuatro distancias métricas continuas hacia las fronteras del objeto:
+      $$\mathbf{caja} = [l, t, r, b] \quad (\text{left, top, right, bottom})$$
+    
+    ---
+    
+    ## 2. Protocolo de Enlace USB
+    
+    Al reiniciar la máquina host en Windows o reconectar el cable de la cámara:
+    
+    1. Abrir la terminal de **Ubuntu** desde el menú Inicio.
+    2. En **PowerShell (como Administrador)** ejecutar:
+       ```powershell
+       usbipd attach --wsl --busid <TU-BUSID> --auto-attach
+       ```
+    3. En la terminal de Ubuntu renovar permisos de acceso al dispositivo:
+       ```bash
+       sudo chmod 666 /dev/video* 2>/dev/null
+       sudo chmod -R 777 /dev/bus/usb/ 2>/dev/null
+       ```
+    
+    ---
+    
+    ## 3. Instalación de Dependencias
+    
+    ```bash
+    # Activar entorno virtual de visión
+    source ~/vision_env/bin/activate
+    
+    # Instalar librerías
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+    
+    ---
+    
+    ## 4. Descarga de Pesos Base
+    
+    Para descargar y verificar los pesos base oficiales:
+    ```bash
+    python descargar_pesos.py
+    ```
+    
+    ---
+    
+    ## 5. Inferencia para Guiado Cinemático (`s5_inferencia_yolo.py`)
+    
+    Aísla el objeto de mayor certeza, reporta errores cinemáticos $(e_u, e_v)$ y valida el acople:
+    ```bash
+    python s5_inferencia_yolo.py
+    ```
+    Abrir en el navegador de Windows: `http://localhost:5000`
+    
+    ---
+    
+    ## 6. Inferencia Multi-Objeto en Escena (`s5_inferencia_yolo_multiobj.py`)
+    
+    Detecta todas las clases y objetos visibles simultáneamente en el campo de visión:
+    ```bash
+    python s5_inferencia_yolo_multiobj.py
+    ```
+    Abrir en el navegador de Windows: `http://localhost:5000`
+    
+    ---
+    
+    ## 7. Telemetría Métrica
+    
+    A partir de las cuatro coordenadas entregadas por la red neuronal $[x_1, y_1, x_2, y_2]$:
+    
+    ### 1. Centroide y Vector de Error de Alineación:
+    $$c_x = \frac{x_1 + x_2}{2}, \quad c_y = \frac{y_1 + y_2}{2}$$
+    $$e_u = c_x - 320, \quad e_v = c_y - 240$$
+    
+    ### 2. Estimación de Distancia Frontal ($Z$) por Modelo Pinhole:
+    Conociendo el ancho real de la pieza física ($W_{\text{real}} = 0.05\text{ m}$) y la distancia focal calibrada ($f_x \approx 615\text{ px}$):
+    $$w_{\text{px}} = x_2 - x_1$$
+    $$Z_{\text{est}} = \frac{f_x \cdot W_{\text{real}}}{w_{\text{px}}} = \frac{615 \cdot 0.05}{w_{\text{px}}} \quad (\text{en metros})$$
+    
+    ---
+    
+    ## 8. Métricas Oficiales de Evaluación para Noviembre
+    
+    Para la entrega del **Entregable A7 (12 de Noviembre)**:
+    
+    * **Intersection over Union (IoU):**
+      $$\text{IoU} = \frac{\text{Área}(\text{Predicción} \cap \text{Ground Truth})}{\text{Área}(\text{Predicción} \cup \text{Ground Truth})}$$
+      Se clasifica como acierto geométrico (*True Positive*) si $\text{IoU} \ge 0.50$.
+    * **Mean Average Precision ($mAP_{50}$):** Área bajo la curva Precision-Recall.
+      * **Criterio de aprobación:** $mAP_{50} \ge 0.85$ sobre el conjunto de prueba (*Test split*).
+    
+    ---
+    
+    ## 9. Solución de Problemas Frecuentes
+    
+    * **`ImportError: No module named 'ultralytics'`:** Confirma que el entorno virtual esté activo (`source ~/vision_env/bin/activate`) y ejecuta `pip install ultralytics`.
+    * **Latencia elevada (< 10 FPS):** Verifica que la inferencia utilice resolución `imgsz=640` o `imgsz=480`. Si se ejecuta sobre CPU, un valor típico oscila entre 20 y 35 FPS para el modelo Nano (`yolov8n`).
+    * **`RuntimeError: No device connected`:** Confirma que la RealSense esté enlazada a WSL2 con `usbipd list` y reconecta con `--auto-attach`.
+    EOF
+    ```
+    
+    ---
+    
+    ## Paso 9: Subir el Repositorio a GitHub
+    
+    1. Ve a [GitHub](https://github.com/new).
+    2. Nombra el repositorio: **`realsense-yolo-inferencia`**.
+    3. Selecciona **Public** y deja las casillas de inicialización desmarcadas.
+    4. En tu terminal de Ubuntu ejecuta:
+    
+    ```bash
+    cd ~/realsense-yolo-inferencia
+    git add .
+    git commit -m "feat: repositorio actualizado con inferencia guiada y multi-objeto yolov8"
+    git remote add origin [https://github.com/GerardoEmirSanchez/realsense-yolo-inferencia.git](https://github.com/GerardoEmirSanchez/realsense-yolo-inferencia.git)
+    git push -u origin main
 ```
